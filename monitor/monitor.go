@@ -2,10 +2,11 @@
 package monitor
 
 import (
-	"fmt"
 	"log"
+	"os"
+	"os/signal"
 
-	"github.com/kr/pretty"
+	"github.com/hpcloud/tail"
 )
 
 // MonitorHTTPAccessLogs consumes a path to a file of HTTP access logs as well
@@ -15,15 +16,10 @@ import (
 // reports key data every reportInterval and traffic spikes.
 func MonitorHTTPAccessLogs(path string, trafficThreshold int) {
 	log.Println("Starting monitor")
-	type myType struct {
-		a, b int
-	}
-	var x = []myType{{1, 2}, {3, 4}, {5, 6}}
-	fmt.Printf("%# v", pretty.Formatter(x))
 
 	// Tail file to take care of any potential errors before we spin up
 	// goroutines.
-	/*tail, err := tail.TailFile(path, tail.Config{Follow: true})
+	tail, err := tail.TailFile(path, tail.Config{Follow: true})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -47,7 +43,7 @@ func MonitorHTTPAccessLogs(path string, trafficThreshold int) {
 		finishReading <- struct{}{}
 		finishReporting <- struct{}{}
 		break
-	}*/
+	}
 
 	log.Println("Done monitoring")
 }
