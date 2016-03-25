@@ -1,4 +1,3 @@
-// monitor provides monitoring of HTTP access logs through the console.
 package monitor
 
 import (

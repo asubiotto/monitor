@@ -1,4 +1,3 @@
-// monitor provides monitoring of HTTP access logs through the console.
 package monitor
 
 import (
@@ -25,14 +24,16 @@ type HitList []*MonitorNode
 // Tracker is a wrapper struct around a HitList providing several
 // middleware methods for keeping track of HTTP access logs.
 type Tracker struct {
-	hitList *HitList
+	hitList  *HitList
+	sections map[string]*MonitorNode
+	mtx      sync.RWMutex
 }
 
 var (
 	errMalformedLogEntry = errors.New("malformed log entry")
-	sections             = make(map[string]*MonitorNode)
-	tracker              *Tracker
-	trackerMtx           sync.RWMutex
+
+	tracker    *Tracker
+	trackerMtx sync.RWMutex
 )
 
 // InsertSection inserts a new node into the HitList with the specified section
@@ -67,12 +68,15 @@ func (hl *HitList) Update(node *MonitorNode, hits int) {
 // GetTracker initializes the global tracker if it has not been initialized yet
 // and returns a pointer to it in any case.
 func GetTracker() *Tracker {
-	if tracker == nil {
-		trackerMtx.Lock()
-		defer trackerMtx.Unlock()
+	trackerMtx.Lock()
+	defer trackerMtx.Unlock()
 
+	if tracker == nil {
 		hl := make(HitList, 0)
-		tracker = &Tracker{hitList: &hl}
+		tracker = &Tracker{
+			hitList:  &hl,
+			sections: make(map[string]*MonitorNode),
+		}
 	}
 
 	return tracker
@@ -107,30 +111,34 @@ func (t *Tracker) ProcessLogEntry(logEntry string) error {
 		return errMalformedLogEntry
 	}
 
-	// TODO(asubiotto): There are some weird access log things.
+	// TODO(asubiotto): Modify this depending on what Ryan says.
 	if string(pathComponents[1][0]) == " " {
 		// If there was a space, our section was the root.
 		section = "/"
 	}
 
-	// Check for existence of the MonitorNode associated with a specific section
-	// and update accordingly.
-	trackerMtx.Lock()
-	defer trackerMtx.Unlock()
-	if node, ok := sections[section]; ok {
-		t.hitList.Update(node, node.hits+1)
-	} else {
-		sections[section] = t.hitList.InsertSection(section)
-	}
+	t.upsertSection(section)
 
 	return nil
+}
+
+// upsertSection adds a hit to the section if it exists or inserts it to start
+// keeping track of it.
+func (t *Tracker) upsertSection(section string) {
+	t.mtx.Lock()
+	defer t.mtx.Unlock()
+	if node, ok := t.sections[section]; ok {
+		t.hitList.Update(node, node.hits+1)
+	} else {
+		t.sections[section] = t.hitList.InsertSection(section)
+	}
 }
 
 // GetTopHits returns a slice of up to limit MonitorNodes with the highest
 // number of hits.
 func (t *Tracker) GetTopHits(limit int) []MonitorNode {
-	trackerMtx.RLock()
-	defer trackerMtx.RUnlock()
+	t.mtx.RLock()
+	defer t.mtx.RUnlock()
 
 	if limit > len(*t.hitList) {
 		limit = len(*t.hitList)

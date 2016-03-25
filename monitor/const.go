@@ -4,12 +4,14 @@ package monitor
 import "time"
 
 const (
-	// Reporter reports metrics every reportInterval.
+	// How often top section hits should be reported.
 	reportInterval = 10 * time.Second
 
-	// Reporter shows only the top reportLimit sections every reportInterval.
+	// How many top section hits should be shown.
 	reportLimit = 10
 
-	// Reporter repots spikes in traffic that occurred in trafficWindow.
-	trafficWindow = 2 * time.Minute
+	// If total traffic averaged over the number of sections goes over
+	// trafficThreshold, report a traffic spike.
+	trafficWindow    = 2 * time.Minute
+	trafficThreshold = 10
 )
