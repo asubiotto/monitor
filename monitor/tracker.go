@@ -101,36 +101,38 @@ func GetTracker() *Tracker {
 // and updates the hits on that website section if it exists, otherwise starts
 // tracking a new section.
 func (t *Tracker) ProcessLogEntry(logEntry string) error {
-	// HTTP access logs seem to vary quite a lot depending on the server
-	// logging the accesses. The unique element across all access logs is that
-	// the HTTP method is always contained and occurs after the first \" char.
+	// Request line starts with "\"".
 	values := strings.Split(logEntry, "\"")
 	if len(values) < 2 {
-		print(logEntry)
 		return errMalformedLogEntry
 	}
 
-	pathComponents := strings.Split(values[1], "/")
+	requestLine := values[1]
 
-	var section string
-	if len(pathComponents) > 1 {
-		section = pathComponents[1]
-	} else {
-		print(logEntry)
+	// Find the first "/" after the start of request line.
+	firstSlashIdx := 0
+	for i, s := range requestLine {
+		if s == '/' {
+			firstSlashIdx = i
+			break
+		}
+	}
+
+	if firstSlashIdx == 0 || firstSlashIdx == len(requestLine)-1 {
 		return errMalformedLogEntry
 	}
 
-	if len(pathComponents[1]) < 1 {
-		// There was nothing after the first slash.
-		return errMalformedLogEntry
+	// Iterate until you hit a "\"" (end of request line), " " (end of url in
+	// request line), or a "/", which will be the second "/".
+	sectionEnd := firstSlashIdx
+	for i, s := range requestLine[firstSlashIdx+1:] {
+		if s == '"' || s == ' ' || s == '/' {
+			sectionEnd = i + firstSlashIdx + 1
+			break
+		}
 	}
 
-	// TODO(asubiotto): Modify this depending on what Ryan says.
-	if string(pathComponents[1][0]) == " " {
-		// If there was a space, our section was the root.
-		section = "/"
-	}
-
+	section := requestLine[firstSlashIdx:sectionEnd]
 	t.upsertSection(section)
 
 	return nil
