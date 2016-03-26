@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func reportMetrics(trafficThreshold int, finishReporting chan struct{}) {
+func reportMetrics(finishReporting chan struct{}) {
 	tracker := GetTracker()
 	w := new(tabwriter.Writer)
 	w.Init(os.Stdout, 0, 8, 0, '\t', 0)

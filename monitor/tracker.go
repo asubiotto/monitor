@@ -65,6 +65,16 @@ func (hl *HitList) Update(node *MonitorNode, hits int) {
 	}
 }
 
+// InitTracker initializes the global tracker with a specified traffic
+// threshold. Not threadsafe.
+func InitTracker(threshold int) {
+	hl := make(HitList, 0)
+	tracker = &Tracker{
+		hitList:  &hl,
+		sections: make(map[string]*MonitorNode),
+	}
+}
+
 // GetTracker initializes the global tracker if it has not been initialized yet
 // and returns a pointer to it in any case.
 func GetTracker() *Tracker {
@@ -72,11 +82,7 @@ func GetTracker() *Tracker {
 	defer trackerMtx.Unlock()
 
 	if tracker == nil {
-		hl := make(HitList, 0)
-		tracker = &Tracker{
-			hitList:  &hl,
-			sections: make(map[string]*MonitorNode),
-		}
+		InitTracker(trafficThreshold)
 	}
 
 	return tracker

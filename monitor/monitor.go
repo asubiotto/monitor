@@ -25,6 +25,9 @@ func MonitorHTTPAccessLogs(path string, trafficThreshold int) {
 	}
 	defer tail.Cleanup()
 
+	// Initialize the tracker.
+	InitTracker(trafficThreshold)
+
 	// Channels to indicate to the reader and reporter that they should clean
 	// up and exit.
 	finishReading := make(chan struct{})
@@ -35,7 +38,7 @@ func MonitorHTTPAccessLogs(path string, trafficThreshold int) {
 	signal.Notify(sigint, os.Interrupt)
 
 	go readStream(tail, finishReading)
-	go reportMetrics(trafficThreshold, finishReporting)
+	go reportMetrics(finishReporting)
 
 	log.Println("Ctrl-C to quit")
 	for _ = range sigint {
