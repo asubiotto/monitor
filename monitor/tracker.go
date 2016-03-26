@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"sync"
+	"time"
 )
 
 // MonitorNode represents a section of our website. All MonitorNodes are kept
@@ -24,9 +25,14 @@ type HitList []*MonitorNode
 // Tracker is a wrapper struct around a HitList providing several
 // middleware methods for keeping track of HTTP access logs.
 type Tracker struct {
-	hitList  *HitList
-	sections map[string]*MonitorNode
-	mtx      sync.RWMutex
+	hitList           *HitList
+	sections          map[string]*MonitorNode
+	traffic           int  // Total traffic in last trafficWindow.
+	totalTraffic      int  // Total traffic since startTime.
+	threshold         int  // Traffic threshold for traffic spikes.
+	thresholdExceeded bool // Useful for reporting.
+	startTime         time.Time
+	mtx               sync.RWMutex
 }
 
 var (
@@ -70,8 +76,10 @@ func (hl *HitList) Update(node *MonitorNode, hits int) {
 func InitTracker(threshold int) {
 	hl := make(HitList, 0)
 	tracker = &Tracker{
-		hitList:  &hl,
-		sections: make(map[string]*MonitorNode),
+		hitList:   &hl,
+		sections:  make(map[string]*MonitorNode),
+		threshold: threshold,
+		startTime: time.Now(),
 	}
 }
 
@@ -138,6 +146,37 @@ func (t *Tracker) upsertSection(section string) {
 	} else {
 		t.sections[section] = t.hitList.InsertSection(section)
 	}
+
+	go t.incrementTraffic()
+}
+
+// incrementTraffic adds to total traffic checking for trafficThreshold
+// violations and starts a timer to decrement traffic after thresholdWindow.
+func (t *Tracker) incrementTraffic() {
+	t.mtx.Lock()
+	defer t.mtx.Unlock()
+	t.traffic++
+	t.totalTraffic++
+
+	if ((t.traffic / len(*t.hitList)) > t.threshold) && !t.thresholdExceeded {
+		// This traffic increment caused our threshold to be exceeded, therefore
+		// report.
+		t.thresholdExceeded = true
+		reportTrafficSpike(t.traffic)
+	}
+
+	go func() {
+		<-time.After(trafficWindow)
+		t.mtx.Lock()
+		defer t.mtx.Unlock()
+		t.traffic--
+		if ((t.traffic / len(*t.hitList)) <= t.threshold) && t.thresholdExceeded {
+			// This traffic decrement caused our average traffic over all
+			// sections to fall below our threshold.
+			t.thresholdExceeded = false
+			reportTrafficUnspike(t.traffic)
+		}
+	}()
 }
 
 // GetTopHits returns a slice of up to limit MonitorNodes with the highest
@@ -157,4 +196,28 @@ func (t *Tracker) GetTopHits(limit int) []MonitorNode {
 	}
 
 	return result
+}
+
+// GetNumSections returns the total number of sections.
+func (t *Tracker) GetNumSections() int {
+	t.mtx.RLock()
+	defer t.mtx.RUnlock()
+
+	return len(*t.hitList)
+}
+
+// GetTotalTraffic returns the total number of hits.
+func (t *Tracker) GetTotalTraffic() int {
+	t.mtx.RLock()
+	defer t.mtx.RUnlock()
+
+	return t.totalTraffic
+}
+
+// GetRPS returns the requests per second in trafficWindow.
+func (t *Tracker) GetRPS() float64 {
+	t.mtx.RLock()
+	defer t.mtx.RUnlock()
+
+	return float64(t.totalTraffic) / time.Since(t.startTime).Seconds()
 }

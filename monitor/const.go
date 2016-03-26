@@ -12,6 +12,6 @@ const (
 
 	// If total traffic averaged over the number of sections goes over
 	// trafficThreshold, report a traffic spike.
-	trafficWindow    = 2 * time.Minute
+	trafficWindow    = 10 * time.Second
 	trafficThreshold = 10
 )
