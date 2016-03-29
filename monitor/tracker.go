@@ -149,14 +149,13 @@ func (t *Tracker) upsertSection(section string) {
 		t.sections[section] = t.hitList.InsertSection(section)
 	}
 
-	go t.incrementTraffic()
+	t.incrementTraffic(trafficWindow)
 }
 
 // incrementTraffic adds to total traffic checking for trafficThreshold
-// violations and starts a timer to decrement traffic after thresholdWindow.
-func (t *Tracker) incrementTraffic() {
-	t.mtx.Lock()
-	defer t.mtx.Unlock()
+// violations and starts a timer to decrement traffic after tWindow. t.mtx
+// should be held when calling this function.
+func (t *Tracker) incrementTraffic(tWindow time.Duration) {
 	t.traffic++
 	t.totalTraffic++
 
@@ -168,7 +167,7 @@ func (t *Tracker) incrementTraffic() {
 	}
 
 	go func() {
-		<-time.After(trafficWindow)
+		<-time.After(tWindow)
 		t.mtx.Lock()
 		defer t.mtx.Unlock()
 		t.traffic--
